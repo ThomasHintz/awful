@@ -43,7 +43,7 @@
 
 ;; Eggs
 (use intarweb spiffy spiffy-request-vars html-tags html-utils uri-common
-     http-session json spiffy-cookies regex)
+     http-session json spiffy-cookies regex sxml-transforms)
 
 ;;; Version
 (define (awful-version) "0.34")
@@ -131,6 +131,18 @@
 
 
 ;;; Misc
+(define sxml->html
+  (let ((rules `((literal *preorder* . ,(lambda (t b) b))
+                 . ,universal-conversion-rules*)))
+    (lambda (sxml #!optional more-rules)
+      (with-output-to-string
+        (lambda ()
+          (SRV:send-reply (pre-post-order* sxml
+                                           (if more-rules
+                                               (cons more-rules rules)
+                                               rules))))))))
+
+
 (define ++ string-append)
 
 (define (concat args #!optional (sep ""))
@@ -532,7 +544,7 @@
 
 (define (define-page path contents #!key css title doctype headers charset no-ajax
                      no-template no-session no-db vhost-root-path no-javascript-compression
-                     use-ajax (method 'GET)
+                     use-ajax (method 'GET) sxml-rules
                      use-session) ;; for define-session-page
   (##sys#check-closure contents 'define-page)
   (let ((path (page-path path)))
@@ -584,10 +596,13 @@
                                         (let ((out (resp)))
                                           (lambda ()
                                             out))
-                                        (++ resp
-                                            (if (eq? (javascript-position) 'bottom)
-                                                (include-page-javascript ajax? no-javascript-compression)
-                                                "")))))))
+                                        (let ((out (if (pair? resp)
+                                                       (sxml->html resp sxml-rules)
+                                                       resp)))
+                                          (++ out
+                                              (if (eq? (javascript-position) 'bottom)
+                                                  (include-page-javascript ajax? no-javascript-compression)
+                                                  ""))))))))
                           (if (%redirect)
                               #f ;; no need to do anything.  Let `run-resource' perform the redirection
                               (if no-template
@@ -603,7 +618,11 @@
                                                                        use-ajax
                                                                        (ajax-library)))
                                                     "")
-                                                (or headers "")
+                                                (if headers
+                                                    (if (pair? headers)
+                                                        (sxml->html headers sxml-rules)
+                                                        headers)
+                                                    "")
                                                 (if (eq? (javascript-position) 'top)
                                                     (include-page-javascript ajax? no-javascript-compression)
                                                     ""))
