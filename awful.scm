@@ -49,6 +49,18 @@
 (define (awful-version) "0.34")
 
 
+;;; Protect awful against html-tags's `(generate-sxml? #t)'
+(define-syntax without-sxml
+  (syntax-rules ()
+    ((_ body ...)
+     (parameterize ((generate-sxml? #f))
+       body ...))))
+
+(define (->html thing)
+  (if (pair? thing)
+      (sxml->html thing)
+      thing))
+
 ;;; Parameters
 
 ;; User-configurable parameters
@@ -62,7 +74,7 @@
 (define ajax-namespace (make-parameter "ajax"))
 (define enable-session (make-parameter #f))
 (define page-access-control (make-parameter (lambda (path) #t)))
-(define page-access-denied-message (make-parameter (lambda (path) (<h3> "Access denied."))))
+(define page-access-denied-message (make-parameter (lambda (path) (without-sxml (<h3> "Access denied.")))))
 (define page-doctype (make-parameter ""))
 (define page-css (make-parameter #f))
 (define page-charset (make-parameter #f))
@@ -70,12 +82,15 @@
 (define main-page-path (make-parameter "/"))
 (define app-root-path (make-parameter "/"))
 (define valid-password? (make-parameter (lambda (user password) #f)))
-(define page-template (make-parameter html-page))
+(define page-template (make-parameter
+                       (lambda args
+                         (without-sxml
+                          (apply html-page args)))))
 (define ajax-invalid-session-message (make-parameter "Invalid session."))
 (define web-repl-access-control (make-parameter (lambda () #f)))
-(define web-repl-access-denied-message (make-parameter (<h3> "Access denied.")))
+(define web-repl-access-denied-message (make-parameter (without-sxml (<h3> "Access denied."))))
 (define session-inspector-access-control (make-parameter (lambda () #f)))
-(define session-inspector-access-denied-message (make-parameter (<h3> "Access denied.")))
+(define session-inspector-access-denied-message (make-parameter (without-sxml (<h3> "Access denied."))))
 (define enable-javascript-compression (make-parameter #f))
 (define javascript-compressor (make-parameter identity))
 (define awful-response-headers (make-parameter #f))
@@ -85,7 +100,8 @@
 (define page-exception-message
   (make-parameter
    (lambda (exn)
-     (<h3> "An error has accurred while processing your request."))))
+     (without-sxml
+      (<h3> "An error has accurred while processing your request.")))))
 (define debug-resources (make-parameter #f)) ;; usually useful for awful development debugging
 (define enable-session-cookie (make-parameter #t))
 (define session-cookie-name (make-parameter "awful-cookie"))
@@ -142,7 +158,6 @@
                                                (cons more-rules rules)
                                                rules))))))))
 
-
 (define ++ string-append)
 
 (define (concat args #!optional (sep ""))
@@ -170,9 +185,10 @@
   (define-page "/reload"
     (lambda ()
       (reload-apps (awful-apps))
-      (++ (<p> "The following awful apps have been reloaded on "
-               (seconds->string (current-seconds)))
-          (itemize (map <code> (awful-apps)))))
+      (without-sxml
+       (++ (<p> "The following awful apps have been reloaded on "
+                (seconds->string (current-seconds)))
+           (itemize (map <code> (awful-apps))))))
     no-ajax: #t
     title: "Awful reloaded applications"))
 
@@ -184,16 +200,17 @@
   ;; web-repl and session-inspector (if enabled)
   (page-exception-message
    (lambda (exn)
-     (++ (<pre> convert-to-entities?: #t
-                (with-output-to-string
-                  (lambda ()
-                    (print-call-chain)
-                    (print-error-message exn))))
-         (<p> "[" (<a> href: (or (%web-repl-path) "/web-repl") "Web REPL") "]"
-              (if (enable-session)
-                  (++ " [" (<a> href: (or (%session-inspector-path) "/session-inspector")
-                                "Session inspector") "]")
-                  "")))))
+     (without-sxml
+      (++ (<pre> convert-to-entities?: #t
+                 (with-output-to-string
+                   (lambda ()
+                     (print-call-chain)
+                     (print-error-message exn))))
+          (<p> "[" (<a> href: (or (%web-repl-path) "/web-repl") "Web REPL") "]"
+               (if (enable-session)
+                   (++ " [" (<a> href: (or (%session-inspector-path) "/session-inspector")
+                                 "Session inspector") "]")
+                   ""))))))
 
   ;; If web-repl has not been activated, activate it allowing access
   ;; to the localhost at least (`web-repl-access-control' can be
@@ -259,10 +276,11 @@
 
 ;;; Javascript
 (define (include-javascript . files)
-  (string-intersperse
-   (map (lambda (file)
-          (<script> type: "text/javascript" src: file))
-        files)))
+  (without-sxml
+   (string-intersperse
+    (map (lambda (file)
+           (<script> type: "text/javascript" src: file))
+         files))))
 
 (define (add-javascript . code)
   (page-javascript (++ (page-javascript) (concat code))))
@@ -312,35 +330,37 @@
                         (not (get-keyword no-session: rest))))
         (arguments (or (get-keyword arguments: rest) '()))
         (separator (or (get-keyword separator: rest) ";&")))
-    (apply <a>
-           (append
-            (list href: (if url
-                            (++ url
-                                (if (or pass-sid? (not (null? arguments)))
-                                    (++ "?"
-                                        (form-urlencode
-                                         (append arguments
-                                                 (if pass-sid?
-                                                     `((sid . ,(sid)))
-                                                     '()))
-                                         separator: separator))
-                                    ""))
-                            "#"))
-            rest
-            (list text)))))
+    (without-sxml
+     (apply <a>
+            (append
+             (list href: (if url
+                             (++ url
+                                 (if (or pass-sid? (not (null? arguments)))
+                                     (++ "?"
+                                         (form-urlencode
+                                          (append arguments
+                                                  (if pass-sid?
+                                                      `((sid . ,(sid)))
+                                                      '()))
+                                          separator: separator))
+                                     ""))
+                             "#"))
+             rest
+             (list (->html text)))))))
 
 (define (form contents . rest)
   (let ((pass-sid? (and (not (enable-session-cookie))
                         (sid)
                         (session-valid? (sid))
                         (not (get-keyword no-session: rest)))))
-    (apply <form>
-           (append rest
-                   (list
-                    (++ (if pass-sid?
-                            (hidden-input 'sid (sid))
-                            "")
-                        contents))))))
+    (without-sxml
+     (apply <form>
+            (append rest
+                    (list
+                     (++ (if pass-sid?
+                             (hidden-input 'sid (sid))
+                             "")
+                         (->html contents))))))))
 
 
 ;;; HTTP request variables access
@@ -514,18 +534,19 @@
   (hash-table-delete! *resources* (list path (or vhost-root-path (root-path)) method)))
 
 (define (include-page-javascript ajax? no-javascript-compression)
-  (if ajax?
-      (<script> type: "text/javascript"
-                (maybe-compress-javascript
-                 (++ "$(document).ready(function(){"
-                     (page-javascript) "});")
-                 no-javascript-compression))
-      (if (string-null? (page-javascript))
-          ""
-          (<script> type: "text/javascript"
-                    (maybe-compress-javascript
-                     (page-javascript)
-                     no-javascript-compression)))))
+  (without-sxml
+   (if ajax?
+       (<script> type: "text/javascript"
+                 (maybe-compress-javascript
+                  (++ "$(document).ready(function(){"
+                      (page-javascript) "});")
+                  no-javascript-compression))
+       (if (string-null? (page-javascript))
+           ""
+           (<script> type: "text/javascript"
+                     (maybe-compress-javascript
+                      (page-javascript)
+                      no-javascript-compression))))))
 
 (define (page-path path #!optional namespace)
   (cond ((regexp? path) path)
@@ -613,10 +634,11 @@
                                    title: (or (%page-title) title)
                                    doctype: (or doctype (page-doctype))
                                    headers: (++ (if ajax?
-                                                    (<script> type: "text/javascript"
-                                                              src: (if (string? use-ajax)
-                                                                       use-ajax
-                                                                       (ajax-library)))
+                                                    (without-sxml
+                                                     (<script> type: "text/javascript"
+                                                               src: (if (string? use-ajax)
+                                                                        use-ajax
+                                                                        (ajax-library))))
                                                     "")
                                                 (if headers
                                                     (if (pair? headers)
@@ -630,13 +652,14 @@
                       ((page-template) ((page-access-denied-message) (or given-path path))))
                   ((page-template)
                    ""
-                   headers: (<meta> http-equiv: "refresh"
-                                    content: (++ "0;url=" (login-page-path)
-                                                 "?reason=invalid-session&attempted-path=" (or given-path path)
-                                                 "&user=" ($ 'user "")
-                                                 (if (and (not (enable-session-cookie)) ($ 'sid))
-                                                     (++ "&sid=" ($ 'sid))
-                                                     "")))))))
+                   headers: (without-sxml
+                             (<meta> http-equiv: "refresh"
+                                     content: (++ "0;url=" (login-page-path)
+                                                  "?reason=invalid-session&attempted-path=" (or given-path path)
+                                                  "&user=" ($ 'user "")
+                                                  (if (and (not (enable-session-cookie)) ($ 'sid))
+                                                      (++ "&sid=" ($ 'sid))
+                                                      ""))))))))
          (when (and (db-connection) (db-enabled?) (not no-db)) ((db-disconnect) (db-connection)))
          out))
      method))
@@ -770,20 +793,21 @@
         error-handler: error-handler
         cache: cache
         no-db: no-db)
-  (<a> href: "#"
-       id: id
-       class: class
-       hreflang: hreflang
-       type: type
-       rel: rel
-       rev: rev
-       charset: charset
-       coords: coords
-       shape: shape
-       accesskey: accesskey
-       tabindex: tabindex
-       target: a-target
-       text))
+  (without-sxml
+   (<a> href: "#"
+        id: id
+        class: class
+        hreflang: hreflang
+        type: type
+        rel: rel
+        rev: rev
+        charset: charset
+        coords: coords
+        shape: shape
+        accesskey: accesskey
+        tabindex: tabindex
+        target: a-target
+        (sxml->html text))))
 
 
 ;;; Login form
@@ -794,17 +818,18 @@
                           (refill-user #t))
   (let ((attempted-path ($ 'attempted-path))
         (user ($ 'user)))
-    (<form> action: trampoline-path method: "post"
-            (if attempted-path
-                (hidden-input 'attempted-path attempted-path)
-                "")
-            (<span> id: "user-container"
-                    (<label> id: "user-label" for: "user" user-label)
-                    (<input> type: "text" id: "user" name: "user" value: (and refill-user user)))
-            (<span> id: "password-container"
-                    (<label> id: "password-label" for: "password" password-label)
-                    (<input> type: "password" id: "password" name: "password"))
-            (<input> type: "submit" id: "login-submit" value: submit-label))))
+    (without-sxml
+     (<form> action: trampoline-path method: "post"
+             (if attempted-path
+                 (hidden-input 'attempted-path attempted-path)
+                 "")
+             (<span> id: "user-container"
+                     (<label> id: "user-label" for: "user" user-label)
+                     (<input> type: "text" id: "user" name: "user" value: (and refill-user user)))
+             (<span> id: "password-container"
+                     (<label> id: "password-label" for: "password" password-label)
+                     (<input> type: "password" id: "password" name: "password"))
+             (<input> type: "submit" id: "login-submit" value: submit-label)))))
 
 
 ;;; Login trampoline (for redirection)
@@ -820,17 +845,18 @@
         (when (enable-session-cookie)
           ((session-cookie-setter) new-sid))
         (when hook (hook user))
-        (html-page
-         ""
-         headers: (<meta> http-equiv: "refresh"
-                          content: (++ "0;url="
-                                       (if new-sid
-                                           (++ (or attempted-path (main-page-path))
-                                               "?user=" user
-                                               (if (enable-session-cookie)
-                                                   ""
-                                                   (++ "&sid=" new-sid)))
-                                           (++ (login-page-path) "?reason=invalid-password&user=" user)))))))
+        (without-sxml
+         (html-page
+          ""
+          headers: (<meta> http-equiv: "refresh"
+                           content: (++ "0;url="
+                                        (if new-sid
+                                            (++ (or attempted-path (main-page-path))
+                                                "?user=" user
+                                                (if (enable-session-cookie)
+                                                    ""
+                                                    (++ "&sid=" new-sid)))
+                                            (++ (login-page-path) "?reason=invalid-password&user=" user))))))))
     method: 'POST
     vhost-root-path: vhost-root-path
     no-session: #t
@@ -842,57 +868,59 @@
   (unless (development-mode?) (%web-repl-path path))
   (define-page path
     (lambda ()
-      (if ((web-repl-access-control))
-          (let ((web-eval
-                 (lambda ()
-                   (<pre> convert-to-entities?: #t
-                          (with-output-to-string
-                            (lambda ()
-                              (pp (handle-exceptions
-                                   exn
-                                   (begin
-                                     (print-error-message exn)
-                                     (print-call-chain))
-                                   (eval `(begin
-                                            ,@(with-input-from-string ($ 'code "")
-                                                read-file)))))))))))
-            (page-javascript
-             (++ "$('#clear').click(function(){"
-                 (if (enable-web-repl-fancy-editor)
-                     "editor.setCode('');"
-                     "$('#prompt').val('');")
-                 "});"))
-
-            (ajax (++ path "-eval") 'eval 'click web-eval
-                  target: "result"
-                  arguments: `((code . ,(if (enable-web-repl-fancy-editor)
-                                            "editor.getCode()"
-                                            "$('#prompt').val()"))))
-
-            (when (enable-web-repl-fancy-editor)
-              (ajax (++ path "-eval") 'eval-region 'click web-eval
-                    target: "result"
-                    arguments: `((code . "editor.selection()"))))
-
-            (++ (<h1> title)
-                (<h2> "Input area")
-                (let ((prompt (<textarea> id: "prompt" name: "prompt" rows: "10" cols: "90")))
+      (without-sxml
+       (if ((web-repl-access-control))
+           (let ((web-eval
+                  (lambda ()
+                    (without-sxml
+                     (<pre> convert-to-entities?: #t
+                            (with-output-to-string
+                              (lambda ()
+                                (pp (handle-exceptions
+                                        exn
+                                      (begin
+                                        (print-error-message exn)
+                                        (print-call-chain))
+                                      (eval `(begin
+                                               ,@(with-input-from-string ($ 'code "")
+                                                   read-file))))))))))))
+             (page-javascript
+              (++ "$('#clear').click(function(){"
                   (if (enable-web-repl-fancy-editor)
-                      (<div> class: "border" prompt)
-                      prompt))
-                (itemize
-                 (map (lambda (item)
-                        (<button> id: (car item) (cdr item)))
-                      (append '(("eval"  . "Eval"))
-                              (if (enable-web-repl-fancy-editor)
-                                  '(("eval-region" . "Eval region"))
-                                  '())
-                              '(("clear" . "Clear"))))
-                 list-id: "button-bar")
-                (<h2> "Output area")
-                (<div> id: "result")
-                (if (enable-web-repl-fancy-editor)
-                    (<script> type: "text/javascript" "
+                      "editor.setCode('');"
+                      "$('#prompt').val('');")
+                  "});"))
+
+             (ajax (++ path "-eval") 'eval 'click web-eval
+                   target: "result"
+                   arguments: `((code . ,(if (enable-web-repl-fancy-editor)
+                                             "editor.getCode()"
+                                             "$('#prompt').val()"))))
+
+             (when (enable-web-repl-fancy-editor)
+               (ajax (++ path "-eval") 'eval-region 'click web-eval
+                     target: "result"
+                     arguments: `((code . "editor.selection()"))))
+
+             (++ (<h1> title)
+                 (<h2> "Input area")
+                 (let ((prompt (<textarea> id: "prompt" name: "prompt" rows: "10" cols: "90")))
+                   (if (enable-web-repl-fancy-editor)
+                       (<div> class: "border" prompt)
+                       prompt))
+                 (itemize
+                  (map (lambda (item)
+                         (<button> id: (car item) (cdr item)))
+                       (append '(("eval"  . "Eval"))
+                               (if (enable-web-repl-fancy-editor)
+                                   '(("eval-region" . "Eval region"))
+                                   '())
+                               '(("clear" . "Clear"))))
+                  list-id: "button-bar")
+                 (<h2> "Output area")
+                 (<div> id: "result")
+                 (if (enable-web-repl-fancy-editor)
+                     (<script> type: "text/javascript" "
   function addClass(element, className) {
     if (!editor.win.hasClass(element, className)) {
       element.className = ((element.className.split(' ')).concat([className])).join(' ');}}
@@ -919,26 +947,28 @@
     markParen: function(span, good) {addClass(span, good ? 'good-matching-paren' : 'bad-matching-paren');},
     unmarkParen: function(span) {removeClass(span, 'good-matching-paren'); removeClass(span, 'bad-matching-paren');}
   });")
-                    "")))
-          (web-repl-access-denied-message)))
-    headers: (++ (if (enable-web-repl-fancy-editor)
-                     (include-javascript (make-pathname (web-repl-fancy-editor-base-uri) "codemirror.js")
-                                         (make-pathname (web-repl-fancy-editor-base-uri) "mirrorframe.js"))
-                     "")
-                 (let ((builtin-css (if css
-                                        #f
-                                        (<style> type: "text/css"
-"h1 { font-size: 18pt; background-color: #898E79; width: 590px; color: white; padding: 5px;}
+                     "")))
+           (web-repl-access-denied-message))))
+    headers: (without-sxml
+              (++ (if (enable-web-repl-fancy-editor)
+                      (include-javascript (make-pathname (web-repl-fancy-editor-base-uri) "codemirror.js")
+                                          (make-pathname (web-repl-fancy-editor-base-uri) "mirrorframe.js"))
+                      "")
+                  (let ((builtin-css
+                         (if css
+                             #f
+                             (<style> type: "text/css"
+                                      "h1 { font-size: 18pt; background-color: #898E79; width: 590px; color: white; padding: 5px;}
 h2 { font-size: 14pt; background-color: #898E79; width: 590px; color: white; padding: 5px;}
 ul#button-bar { margin-left: 0; padding-left: 0; }
 #button-bar li {display: inline; list-style-type: none; padding-right: 10px; }"
-(if (enable-web-repl-fancy-editor)
-    "div.border { border: 1px solid black; width: 600px;}"
-    "#prompt { width: 600px; }")
-"#result { border: 1px solid #333; padding: 5px; width: 590px; }"))))
-                   (if headers
-                       (++ (or builtin-css "") headers)
-                       builtin-css)))
+                                      (if (enable-web-repl-fancy-editor)
+                                          "div.border { border: 1px solid black; width: 600px;}"
+                                          "#prompt { width: 600px; }")
+                                      "#result { border: 1px solid #333; padding: 5px; width: 590px; }"))))
+                    (if headers
+                        (++ (or builtin-css "") (->html headers))
+                        builtin-css))))
     use-ajax: #t
     title: title
     css: css))
@@ -949,38 +979,40 @@ ul#button-bar { margin-left: 0; padding-left: 0; }
   (unless (development-mode?) (%session-inspector-path path))
   (define-page path
     (lambda ()
-      (parameterize ((enable-session #t))
-        (if ((session-inspector-access-control))
-            (let ((bindings (session-bindings (sid))))
-              (++ (<h1> title)
-                  (if (null? bindings)
-                      (<p> "Session for sid " (sid) " is empty")
-                      (++ (<p> "Session for " (sid))
-                          (tabularize
-                           (map (lambda (binding)
-                                  (let ((var (car binding))
-                                        (val (with-output-to-string
-                                               (lambda ()
-                                                 (pp (cdr binding))))))
-                                    (list (<span> class: "session-inspector-var" var)
-                                          (<pre> convert-to-entities?: #t
-                                                 class: "session-inspector-value"
-                                                 val))))
-                                bindings)
-                           header: '("Variables" "Values")
-                           table-id: "session-inspector-table")))))
-            (session-inspector-access-denied-message))))
-    headers: (let ((builtin-css (if css
-                                    #f
-                                    (<style> type: "text/css"
+      (without-sxml
+       (parameterize ((enable-session #t))
+         (if ((session-inspector-access-control))
+             (let ((bindings (session-bindings (sid))))
+               (++ (<h1> title)
+                   (if (null? bindings)
+                       (<p> "Session for sid " (sid) " is empty")
+                       (++ (<p> "Session for " (sid))
+                           (tabularize
+                            (map (lambda (binding)
+                                   (let ((var (car binding))
+                                         (val (with-output-to-string
+                                                (lambda ()
+                                                  (pp (cdr binding))))))
+                                     (list (<span> class: "session-inspector-var" var)
+                                           (<pre> convert-to-entities?: #t
+                                                  class: "session-inspector-value"
+                                                  val))))
+                                 bindings)
+                            header: '("Variables" "Values")
+                            table-id: "session-inspector-table")))))
+             (session-inspector-access-denied-message)))))
+    headers: (without-sxml
+              (let ((builtin-css (if css
+                                     #f
+                                     (<style> type: "text/css"
 "h1 { font-size: 16pt; background-color: #898E79; width: 590px; color: white; padding: 5px;}
 .session-inspector-value { margin: 2px;}
 .session-inspector-var { margin: 0px; }
 #session-inspector-table { margin: 0px; width: 600px;}
 #session-inspector-table tr td, th { padding-left: 10px; border: 1px solid #333; vertical-align: middle; }"))))
                (if headers
-                   (++ (or builtin-css "") headers)
-                   builtin-css))
+                   (++ (or builtin-css "") (->html headers))
+                   builtin-css)))
     title: title
     css: css))
 
