@@ -815,18 +815,17 @@
                           (refill-user #t))
   (let ((attempted-path ($ 'attempted-path))
         (user ($ 'user)))
-    (without-sxml
-     (<form> action: trampoline-path method: "post"
-             (if attempted-path
-                 (hidden-input 'attempted-path attempted-path)
-                 "")
-             (<span> id: "user-container"
-                     (<label> id: "user-label" for: "user" user-label)
-                     (<input> type: "text" id: "user" name: "user" value: (and refill-user user)))
-             (<span> id: "password-container"
-                     (<label> id: "password-label" for: "password" password-label)
-                     (<input> type: "password" id: "password" name: "password"))
-             (<input> type: "submit" id: "login-submit" value: submit-label)))))
+    (<form> action: trampoline-path method: "post"
+            (if attempted-path
+                (hidden-input 'attempted-path attempted-path)
+                "")
+            (<span> id: "user-container"
+                    (<label> id: "user-label" for: "user" user-label)
+                    (<input> type: "text" id: "user" name: "user" value: (and refill-user user)))
+            (<span> id: "password-container"
+                    (<label> id: "password-label" for: "password" password-label)
+                    (<input> type: "password" id: "password" name: "password"))
+            (<input> type: "submit" id: "login-submit" value: submit-label))))
 
 
 ;;; Login trampoline (for redirection)
