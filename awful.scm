@@ -330,37 +330,35 @@
                         (not (get-keyword no-session: rest))))
         (arguments (or (get-keyword arguments: rest) '()))
         (separator (or (get-keyword separator: rest) ";&")))
-    (without-sxml
-     (apply <a>
-            (append
-             (list href: (if url
-                             (++ url
-                                 (if (or pass-sid? (not (null? arguments)))
-                                     (++ "?"
-                                         (form-urlencode
-                                          (append arguments
-                                                  (if pass-sid?
-                                                      `((sid . ,(sid)))
-                                                      '()))
-                                          separator: separator))
-                                     ""))
-                             "#"))
-             rest
-             (list (->html text)))))))
+    (apply <a>
+           (append
+            (list href: (if url
+                            (++ url
+                                (if (or pass-sid? (not (null? arguments)))
+                                    (++ "?"
+                                        (form-urlencode
+                                         (append arguments
+                                                 (if pass-sid?
+                                                     `((sid . ,(sid)))
+                                                     '()))
+                                         separator: separator))
+                                    ""))
+                            "#"))
+            rest
+            (list text)))))
 
 (define (form contents . rest)
   (let ((pass-sid? (and (not (enable-session-cookie))
                         (sid)
                         (session-valid? (sid))
                         (not (get-keyword no-session: rest)))))
-    (without-sxml
-     (apply <form>
-            (append rest
-                    (list
-                     (++ (if pass-sid?
-                             (hidden-input 'sid (sid))
-                             "")
-                         (->html contents))))))))
+    (apply <form>
+           (append rest
+                   (list
+                    (++ (if pass-sid?
+                            (hidden-input 'sid (sid))
+                            "")
+                        contents))))))
 
 
 ;;; HTTP request variables access
@@ -793,21 +791,20 @@
         error-handler: error-handler
         cache: cache
         no-db: no-db)
-  (without-sxml
-   (<a> href: "#"
-        id: id
-        class: class
-        hreflang: hreflang
-        type: type
-        rel: rel
-        rev: rev
-        charset: charset
-        coords: coords
-        shape: shape
-        accesskey: accesskey
-        tabindex: tabindex
-        target: a-target
-        (sxml->html text))))
+  (<a> href: "#"
+       id: id
+       class: class
+       hreflang: hreflang
+       type: type
+       rel: rel
+       rev: rev
+       charset: charset
+       coords: coords
+       shape: shape
+       accesskey: accesskey
+       tabindex: tabindex
+       target: a-target
+       text))
 
 
 ;;; Login form
