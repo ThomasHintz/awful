@@ -1,4 +1,4 @@
-(use awful spiffy)
+(use awful spiffy html-tags)
 
 (define-page "a" (lambda () "a"))
 
@@ -31,7 +31,11 @@
             (handler)))
          ((string-prefix? "/prefix3" path)
           (parameterize ((param "prefix3"))
-            (handler))))))
+            (handler)))
+         ((string-prefix? "/sxml-html-tags" path)
+          (parameterize ((generate-sxml? #t))
+            (handler))
+          ))))
 
 (define-page "/prefix1" (lambda () (param)))
 (define-page "/prefix2" (lambda () (param)))
@@ -112,3 +116,15 @@
 (define-page match-path
   (lambda (id)
     id))
+
+
+;;; SXML
+(define-page "/sxml"
+  (lambda ()
+    '((p "Hello ")
+      (b "world"))))
+
+(define-page "/sxml-html-tags"
+  (lambda ()
+    `(,(<p> "Hello ")
+      ,(<b> "world"))))

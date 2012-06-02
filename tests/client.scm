@@ -104,4 +104,8 @@
             (get "/path-procedure")))
 
 
+;;; SXML
+(test (expect "\n<p>Hello </p><b>world</b>") (get "/sxml"))
+(test (expect "\n<p>Hello </p><b>world</b>") (get "/sxml-html-tags"))
+
 (test-end "awful")
