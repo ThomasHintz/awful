@@ -1,4 +1,4 @@
-(use test http-client posix setup-api intarweb uri-common)
+(use test http-client posix setup-api intarweb uri-common awful)
 
 (define server-uri "http://localhost:8080")
 
@@ -20,6 +20,8 @@
     (close-all-connections!)
     val))
 
+(define (expect text #!key title)
+  ((page-template) text title: title))
 
 ;;; cleanup
 (if (and (file-exists? "a") (not (directory? "a")))
@@ -30,15 +32,15 @@
 
 ;; When a procedure is bound to a path and the path does not exist,
 ;; just execute the procedure
-(test "a" (get "/a"))
-(test "a" (get "/a/"))
+(test (expect "a") (get "/a"))
+(test (expect "a") (get "/a/"))
 
 ;; When a procedure is bound to a path and the path exists and is a
 ;; directory, but does not contain an index-file, executed the
 ;; procedure bound to the path
 (create-directory "a")
-(test "a" (get "/a"))
-(test "a" (get "/a/"))
+(test (expect "a") (get "/a"))
+(test (expect "a") (get "/a/"))
 
 ;; When a procedure is bound to a path and the path exists, is a
 ;; directory and contains an index-file, the response is the file
@@ -59,20 +61,47 @@
 (delete-file* "a")
 
 ;; Redirections
-(test "bar" (get "/foo"))
-(test "D" (get "/ra"))
+(test (expect "bar") (get "/foo"))
+(test (expect "D") (get "/ra"))
 
 ;; hooks
-(test "prefix1" (get "/prefix1"))
-(test "prefix2" (get "/prefix2"))
-(test "prefix3" (get "/prefix3"))
-(test "unset" (get "/param-unset"))
+(test (expect "prefix1") (get "/prefix1"))
+(test (expect "prefix2") (get "/prefix2"))
+(test (expect "prefix3") (get "/prefix3"))
+(test (expect "unset") (get "/param-unset"))
 
-;;; restful
-(test "post" (post "/post"))
-(test "get" (get "/get"))
-(test "get" (get "/get2"))
-(test "get" (get "/same-path"))
-(test "post" (post "/same-path"))
+;;; RESTful
+(test (expect "post") (post "/post"))
+(test (expect "get") (get "/get"))
+(test (expect "get") (get "/get2"))
+(test (expect "get") (get "/same-path"))
+(test (expect "post") (post "/same-path"))
+
+
+;;; set-page-title!
+(test (expect "" title: "a nice title") (get "/a-nice-title"))
+(test (expect "" title: "another nice title") (get "/another-nice-title"))
+(test (expect "" title: "set-by-set") (get "/confusing-titles"))
+
+
+;;; define-page returning procedure
+(test "foo" (get "/return-procedure"))
+(delete-file "ret-proc")
+
+
+;;; awful-resources-table
+(test (expect "ok") (get "/resources-table-is-hash-table"))
+(test (expect "ok") (get "/resources-table-contains-return-procedure"))
+
+
+;;; path matcher as procedure
+(test (expect "foo") (get "/path-procedure/foo"))
+(test (expect "bar") (get "/path-procedure/bar/baz"))
+(test 'ok (handle-exceptions exn
+            (if ((condition-predicate 'client-error) exn) ;; 404
+                'ok
+                'fail)
+            (get "/path-procedure")))
+
 
 (test-end "awful")
