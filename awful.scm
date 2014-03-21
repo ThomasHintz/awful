@@ -1241,4 +1241,6 @@
     use-sxml: #t
     css: css))
 
+(include "awful-sxml.scm")
+
 ) ; end module

@@ -6,6 +6,7 @@
 (use spiffy awful html-tags)
 
 (debug-log (current-error-port))
+(ajax-library "jquery.min.js")
 
 (page-exception-message
  (lambda (exn)

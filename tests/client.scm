@@ -24,7 +24,9 @@
 ;; OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN
 ;; IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-(use test http-client posix setup-api intarweb uri-common awful html-tags)
+(use test http-client posix setup-api intarweb uri-common awful html-tags sxml-transforms)
+
+(enable-sxml #t)
 
 (define server-uri (sprintf "http://localhost:~a" (server-port)))
 
@@ -36,6 +38,14 @@
     (close-all-connections!)
     val))
 
+(define (expect text #!key title no-template headers)
+  ((sxml->html)
+   (if no-template
+       `(,text)
+       (parameterize
+        ((generate-sxml? #t))
+        ((page-template) `(,text) title: title headers: headers)))))
+
 (define (post path)
   (let ((val (with-input-from-request
               (make-request
@@ -45,24 +55,6 @@
               read-string)))
     (close-all-connections!)
     val))
-
-(define (expect text #!key title headers)
-  ((page-template) text
-   title: title
-   headers: headers))
-
-(define (expect/sxml text #!key title no-template headers)
-  (let ((no-template-page
-         (lambda (contents . kw-args)
-           contents)))
-    (parameterize ((generate-sxml? #t))
-      ((sxml->html) ((if no-template
-                         no-template-page
-                         (page-template))
-                     `(,(text))
-                     title: title
-                     headers: headers)))))
-
 
 ;;; cleanup
 (if (and (file-exists? "a") (not (directory? "a")))
@@ -155,31 +147,23 @@
 
 ;;; literal-script/style?
 (test-begin "literal-script/style?")
-(test (expect/sxml (lambda ()
-                     "<b>")
-                   headers: '(script (@ (type "text/javascript")) (literal "<b>")))
-      (get "/literal-js/use-sxml"))
+(test (expect 'b headers: '(script (@ (type "text/javascript")) (literal "<b>")))
+      (get "/literal-js"))
 
-(test (expect/sxml (lambda ()
-                     "<b>")
-                   headers: '(script (@ (type "text/javascript")) "<b>"))
-      (get "/no-literal-js/use-sxml"))
+(test (expect 'b headers: '(script (@ (type "text/javascript")) "<b>"))
+      (get "/no-literal-js"))
 
-(test (expect/sxml (lambda ()
-                     "<b>")
-                   headers: '(script (@ (type "text/javascript")) (literal "<b>")))
-      (get "/literal-js/enable-sxml"))
+;; (test (expect "<b>" headers: '(script (@ (type "text/javascript")) (literal "<b>")))
+;;       (get "/literal-js/enable-sxml"))
 
-(test (expect/sxml (lambda ()
-                     "<b>")
-                   headers: '(script (@ (type "text/javascript")) (literal "&lt;b&gt;")))
-      (get "/no-literal-js/enable-sxml"))
+;; (test (expect "<b>" headers: '(script (@ (type "text/javascript")) (literal "&lt;b&gt;")))
+;;       (get "/no-literal-js/enable-sxml"))
 
-(test (expect "<b>" headers: "<script type='text/javascript'><b></script>")
-      (get "/literal-js/strings"))
+;; (test (expect "<b>" headers: "<script type='text/javascript'><b></script>")
+;;       (get "/literal-js/strings"))
 
-(test (expect "<b>" headers: "<script type='text/javascript'><b></script>")
-      (get "/no-literal-js/strings"))
+;; (test (expect "<b>" headers: "<script type='text/javascript'><b></script>")
+;;       (get "/no-literal-js/strings"))
 (test-end "literal-script/style?")
 
 
@@ -188,14 +172,14 @@
 (test (expect "foo" headers: (<style> ".foo { font-size: 12pt; }"))
       (get "/add-literal-css"))
 
-(test (expect/sxml (lambda () "foo") headers: '(style (literal ".foo { font-size: \"12pt\"; }")))
-      (get "/add-literal-css/enable-sxml"))
+;; (test (expect/sxml (lambda () "foo") headers: '(style (literal ".foo { font-size: \"12pt\"; }")))
+;;       (get "/add-literal-css/enable-sxml"))
 
 (test (expect "foo" headers: (<style> ".foo { font-size: &quot;12pt&quot;; }"))
       (get "/add-css"))
 
-(test (expect/sxml (lambda () "foo") headers: '(style (literal ".foo { font-size: &quot;12pt&quot;; }")))
-      (get "/add-css/enable-sxml"))
+;; (test (expect/sxml (lambda () "foo") headers: '(style (literal ".foo { font-size: &quot;12pt&quot;; }")))
+;;       (get "/add-css/enable-sxml"))
 
 (test (expect "foo" headers: (<style> ".foo { font-size: 12pt; }.bar { font-size: 12pt; }"))
       (get "/add-2-css"))
@@ -204,9 +188,9 @@
 
 ;;; SXML
 (test-begin "SXML")
-(test (expect/sxml (lambda () '(span "foo"))) (get "/sxml-foo"))
-(test (expect/sxml (lambda () (link "foo" '(i "bar")))) (get "/sxml-link"))
-(test (expect/sxml (lambda () (link "foo" '(i "bar"))) no-template: #t)
+(test (expect '(span "foo")) (get "/sxml-foo"))
+(test (expect (link "foo" '(i "bar"))) (get "/sxml-link"))
+(test (expect (link "foo" '(i "bar")) no-template: #t)
       (get "/sxml-link-no-template"))
 (test #f (string-contains (get "/sxml/headers") "&lt"))
 (test-end "SXML")

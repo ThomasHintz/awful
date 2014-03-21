@@ -2,6 +2,8 @@
 
 (use awful html-tags)
 
+(enable-sxml #t)
+
 (enable-ajax #t)
 
 (define-page (main-page-path)
@@ -12,8 +14,8 @@
             '((a . 1) (b . 2) (c . 3)))
           update-targets: #t)
 
-    (<div>
-     (link "#" "foo" id: "foo")
-     (<div> id: "a")
-     (<div> id: "b")
-     (<div> id: "c"))))
+    `((div
+       ,(link "#" "foo" id: "foo"))
+      (div (@ (id "a")))
+      (div (@ (id "b")))
+      (div (@ (id "c"))))))

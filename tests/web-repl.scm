@@ -1,5 +1,7 @@
 (use awful)
 
+(enable-sxml #t)
+
 (enable-session #t)
 
 (enable-web-repl "/repl")
